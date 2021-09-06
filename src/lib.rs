@@ -1,4 +1,6 @@
 /// 定义类 C 的枚举类型，并通过一些函数将外部不可控数据安全地转换为枚举类型。
+/// 
+/// ⚠️ 只是适用于含单个 primitive 类型字段的结构体。
 ///
 /// 示例：
 ///
@@ -127,44 +129,50 @@
 #[macro_export]
 macro_rules! const_enum {
     (
-        $Vis:vis $EnumType:ident [$Struct:ident::$Field:ident: $FieldType:tt] {
+        $($Vis:vis $EnumType:ident [$Struct:ident::$Field:ident: $FieldType:tt] {
             $(
+                $(#[$Doc:meta])?
                 $Variance:ident : $Value:literal
             ),+
-        }
+        })+
     ) => {
-        $crate::const_enum!{
-            def_enum: $Vis $EnumType, $FieldType,
-            $($Variance $Value),+
-        }
-        $crate::const_enum!{
-            def_const:
-            $Vis $Struct::$Field, $FieldType,
-            $($Variance $Value),+
-        }
-        $crate::const_enum!{
-            into_field_ty:
-            $EnumType, $FieldType,
-            $($Variance $Value),+
-        }
-        $crate::const_enum!{
-            as_enum:
-            $Vis $Struct::$Field, $EnumType, $FieldType,
-            $($Variance $Value),+
-        }
+        $(
+            $crate::const_enum!{
+                def_enum: $Vis $EnumType, $FieldType,
+                $($(#[$Doc])? $Variance $Value),+
+            }
+            $crate::const_enum!{
+                def_const:
+                $Vis $Struct::$Field, $FieldType,
+                $($(#[$Doc])? $Variance $Value),+
+            }
+            $crate::const_enum!{
+                into_struct:
+                $EnumType, $Struct::$Field:$FieldType,
+                $($Variance $Value),+
+            }
+            $crate::const_enum!{
+                as_enum:
+                $Vis $Struct::$Field, $EnumType, $FieldType,
+                $($Variance $Value),+
+            }
+        )+
     };
-    (def_enum: $Vis:vis $EnumType:ident, $FieldType:tt, $($Variance:ident $Value:literal),+) => {
+    (def_enum: $Vis:vis $EnumType:ident, $FieldType:tt, $($(#[$Doc:meta])? $Variance:ident $Value:literal),+) => {
         #[repr($FieldType)]
         $Vis enum $EnumType {
             $(
+                $(#[$Doc])?
                 $Variance = $Value
             ),+
         }
     };
-    (into_field_ty: $EnumType:ident, $IntoType:ty, $($Variance:ident $Value:literal),+) => {
-        impl core::convert::Into<$IntoType> for $EnumType {
-            fn into(self) -> $IntoType {
-                    self as $IntoType
+    (into_struct: $EnumType:ident, $Struct:ident::$Field:ident:$FieldType:ty, $($Variance:ident $Value:literal),+) => {
+        impl core::convert::Into<$Struct> for $EnumType {
+            fn into(self) -> $Struct {
+                    $Struct {
+                        $Field: self as $FieldType
+                    }
             }
         }
     };
@@ -180,9 +188,12 @@ macro_rules! const_enum {
             }
         }
     };
-    (def_const: $Vis:vis $Struct:ident::$Field:ident, $FieldType:ty, $($Variance:ident $Value:literal),+) => {
+    (def_const: $Vis:vis $Struct:ident::$Field:ident, $FieldType:ty, $($(#[$Doc:meta])? $Variance:ident $Value:literal),+) => {
         impl $Struct {
-            $($Vis const $Variance: $Struct = $Struct { $Field:$Value };)+
+            $(
+                $(#[$Doc])?
+                $Vis const $Variance: $Struct = $Struct { $Field:$Value };
+            )+
         }
     };
 }
